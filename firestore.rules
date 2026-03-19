@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isValidReport(data) {
+      return data.keys().hasAll(['reporterId', 'reportedUsername', 'reason', 'jailDuration', 'createdAt']) &&
+             data.reporterId == request.auth.uid &&
+             data.reportedUsername is string && data.reportedUsername.size() > 0 &&
+             data.reason in ['Griefing', 'Hacking', 'Harassment', 'Other'] &&
+             data.jailDuration in ['1 Day', '1 Week', '1 Month', 'Permanent'] &&
+             data.createdAt is string;
+    }
+    function isValidNotification(data) {
+      return data.keys().hasAll(['email', 'createdAt']) &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.createdAt is string;
+    }
+
+    match /reports/{reportId} {
+      allow create: if isAuthenticated() && isValidReport(request.resource.data);
+      allow read: if isAuthenticated() && resource.data.reporterId == request.auth.uid;
+    }
+
+    match /notifications/{notificationId} {
+      allow create: if isValidNotification(request.resource.data);
+      allow read: if false; // Only admins can read notifications
+    }
+  }
+}
